@@ -55,7 +55,7 @@ Upload a transaction dataset to:
 ✅ Detect Fraud Transactions  
 ✅ Calculate Risk Scores  
 ✅ Classify Risk Levels  
-✅ Generate Recommendations  
+✅ Generate Recommendations
 """)
 
 st.divider()
@@ -104,19 +104,19 @@ if uploaded_file is not None:
 
         data = pd.read_csv(uploaded_file)
 
-        # Automatically remove Class column
+        # Remove Class column automatically
         if "Class" in data.columns:
             data = data.drop("Class", axis=1)
 
         expected_columns = list(feature_names)
 
-        # Check missing columns
+        # Missing columns
         missing_cols = [
             col for col in expected_columns
             if col not in data.columns
         ]
 
-        # Check extra columns
+        # Extra columns
         extra_cols = [
             col for col in data.columns
             if col not in expected_columns
@@ -142,30 +142,36 @@ if uploaded_file is not None:
         # Arrange columns correctly
         data = data[expected_columns]
 
-        # =========================
+        # =====================================
         # PREDICTIONS
-        # =========================
+        # =====================================
 
         predictions = model.predict(data)
         probabilities = model.predict_proba(data)[:, 1]
 
         scores = (probabilities * 100).astype(int)
 
-        results = pd.DataFrame({
-            "Prediction": np.where(
-                predictions == 1,
-                "Fraud",
-                "Not Fraud"
-            ),
-            "Fraud Probability (%)":
-                np.round(probabilities * 100, 2),
-            "Risk Score":
-                scores
-        })
-
-        results["Risk Level"] = results["Risk Score"].apply(
-            risk_level
+        predictions_text = np.where(
+            predictions == 1,
+            "Fraud",
+            "Not Fraud"
         )
+
+        # KEEP ORIGINAL DATA
+        results = data.copy()
+
+        results["Prediction"] = predictions_text
+
+        results["Fraud Probability (%)"] = np.round(
+            probabilities * 100,
+            2
+        )
+
+        results["Risk Score"] = scores
+
+        results["Risk Level"] = results[
+            "Risk Score"
+        ].apply(risk_level)
 
         results["Recommendation"] = results[
             "Risk Score"
@@ -173,9 +179,9 @@ if uploaded_file is not None:
 
         st.success("✅ Analysis Completed Successfully")
 
-        # =========================
+        # =====================================
         # SUMMARY
-        # =========================
+        # =====================================
 
         total = len(results)
 
@@ -200,9 +206,9 @@ if uploaded_file is not None:
 
         st.divider()
 
-        # =========================
+        # =====================================
         # CHART
-        # =========================
+        # =====================================
 
         st.subheader("📊 Risk Distribution")
 
@@ -212,20 +218,24 @@ if uploaded_file is not None:
 
         st.divider()
 
-        # =========================
+        # =====================================
         # TABLE
-        # =========================
+        # =====================================
 
         st.subheader("📋 Detailed Results")
 
         st.dataframe(
-            results,
+            results.head(100),
             use_container_width=True
         )
 
-        # =========================
+        st.caption(
+            "Showing first 100 rows. Download report for full results."
+        )
+
+        # =====================================
         # DOWNLOAD REPORT
-        # =========================
+        # =====================================
 
         report_csv = results.to_csv(
             index=False
