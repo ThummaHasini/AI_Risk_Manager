@@ -66,7 +66,7 @@ st.divider()
 
 st.subheader("📥 Sample CSV")
 
-sample_df = pd.read_csv("creditcard.csv")
+sample_df = pd.read_csv("sample_transaction.csv")
 
 if "Class" in sample_df.columns:
     sample_df = sample_df.drop("Class", axis=1)
