@@ -66,7 +66,12 @@ st.divider()
 
 st.subheader("📥 Sample CSV")
 
-sample_df = pd.DataFrame(columns=feature_names)
+sample_df = pd.read_csv("creditcard.csv")
+
+if "Class" in sample_df.columns:
+    sample_df = sample_df.drop("Class", axis=1)
+
+sample_df = sample_df.head(10)
 
 sample_csv = sample_df.to_csv(index=False)
 
@@ -76,12 +81,6 @@ st.download_button(
     file_name="sample_transaction.csv",
     mime="text/csv"
 )
-
-st.info(
-    "Expected columns: Time, V1, V2, ..., V28, Amount"
-)
-
-st.divider()
 
 # =====================================
 # FILE UPLOAD
