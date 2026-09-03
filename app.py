@@ -1,31 +1,28 @@
 import streamlit as st
 import pandas as pd
-import joblib
 import numpy as np
+import joblib
 
-# ==========================
+# =========================
 # PAGE CONFIG
-# ==========================
+# =========================
+
 st.set_page_config(
     page_title="AI Risk Manager",
     page_icon="🛡️",
     layout="wide"
 )
 
-# ==========================
-# LOAD MODEL
-# ==========================
+# =========================
+# LOAD FILES
+# =========================
+
 model = joblib.load("fraud_model.pkl")
+feature_names = joblib.load("feature_names.pkl")
 
-# ==========================
-# TITLE
-# ==========================
-st.title("🛡️ AI Risk Manager")
-st.markdown("### AI-Powered Financial Fraud Risk Detection System")
-
-# ==========================
+# =========================
 # FUNCTIONS
-# ==========================
+# =========================
 
 def risk_level(score):
     if score < 20:
@@ -45,74 +42,41 @@ def recommendation(score):
         return "Block Transaction"
 
 
-required_cols = [
-    "Time","V1","V2","V3","V4","V5","V6","V7","V8","V9",
-    "V10","V11","V12","V13","V14","V15","V16","V17","V18",
-    "V19","V20","V21","V22","V23","V24","V25","V26",
-    "V27","V28","Amount"
-]
+# =========================
+# UI HEADER
+# =========================
 
-# ==========================
-# DEMO SECTION
-# ==========================
-
-st.subheader("🚀 Quick Demo")
+st.title("🛡️ AI Risk Manager")
+st.markdown("### AI-Powered Financial Fraud Risk Detection System")
 
 st.write(
-    "Run a sample transaction through the fraud detection model."
+    """
+Upload a transaction dataset and the system will:
+
+✅ Detect fraud transactions  
+✅ Generate fraud probability  
+✅ Calculate risk score  
+✅ Assign risk level  
+✅ Recommend action
+"""
 )
-
-if st.button("Run Demo Analysis"):
-
-    demo_data = pd.DataFrame(
-        np.random.randn(1, 30),
-        columns=required_cols
-    )
-
-    prediction = model.predict(demo_data)[0]
-    probability = model.predict_proba(demo_data)[0][1]
-
-    risk_score = int(probability * 100)
-
-    risk = risk_level(risk_score)
-    action = recommendation(risk_score)
-
-    st.success("Analysis Completed")
-
-    col1, col2 = st.columns(2)
-
-    col1.metric(
-        "Fraud Probability",
-        f"{probability*100:.2f}%"
-    )
-
-    col2.metric(
-        "Risk Score",
-        risk_score
-    )
-
-    result_df = pd.DataFrame({
-        "Prediction": [
-            "Fraud" if prediction == 1 else "Not Fraud"
-        ],
-        "Risk Level": [risk],
-        "Recommendation": [action]
-    })
-
-    st.dataframe(result_df, use_container_width=True)
 
 st.divider()
 
-# ==========================
-# CSV UPLOAD
-# ==========================
+# =========================
+# FILE UPLOAD
+# =========================
 
-st.subheader("📁 Upload Transaction CSV")
+st.subheader("📂 Upload Transaction CSV")
 
 uploaded_file = st.file_uploader(
-    "Choose a CSV file",
+    "Upload CSV File",
     type=["csv"]
 )
+
+# =========================
+# PROCESS FILE
+# =========================
 
 if uploaded_file is not None:
 
@@ -120,103 +84,132 @@ if uploaded_file is not None:
 
         data = pd.read_csv(uploaded_file)
 
-        missing = [
-            col for col in required_cols
-            if col not in data.columns
-        ]
+        # ---------------------
+        # COLUMN VALIDATION
+        # ---------------------
 
-        if missing:
-            st.error(
-                f"Missing Required Columns: {missing}"
+        uploaded_columns = list(data.columns)
+        expected_columns = list(feature_names)
+
+        if uploaded_columns != expected_columns:
+
+            st.error("❌ Invalid CSV Format")
+
+            st.write("### Expected Columns")
+
+            st.code(", ".join(expected_columns))
+
+            st.write("### Uploaded Columns")
+
+            st.code(", ".join(uploaded_columns))
+
+            st.warning(
+                f"""
+Expected exactly {len(expected_columns)} columns.
+
+Your file contains {len(uploaded_columns)} columns.
+
+Please upload a CSV having the same structure used for model training.
+"""
             )
-            st.stop()
 
-        data = data[required_cols]
+        else:
 
-        predictions = model.predict(data)
-        probabilities = model.predict_proba(data)[:, 1]
+            # ---------------------
+            # PREDICTIONS
+            # ---------------------
 
-        scores = (probabilities * 100).astype(int)
+            predictions = model.predict(data)
+            probabilities = model.predict_proba(data)[:, 1]
 
-        results = pd.DataFrame({
-            "Prediction": np.where(
-                predictions == 1,
-                "Fraud",
-                "Not Fraud"
-            ),
-            "Fraud Probability (%)": np.round(
-                probabilities * 100,
-                2
-            ),
-            "Risk Score": scores
-        })
+            scores = (probabilities * 100).astype(int)
 
-        results["Risk Level"] = results[
-            "Risk Score"
-        ].apply(risk_level)
+            results = pd.DataFrame({
+                "Prediction": [
+                    "Fraud" if p == 1 else "Not Fraud"
+                    for p in predictions
+                ],
+                "Fraud Probability (%)":
+                    np.round(probabilities * 100, 2),
+                "Risk Score":
+                    scores
+            })
 
-        results["Recommendation"] = results[
-            "Risk Score"
-        ].apply(recommendation)
+            results["Risk Level"] = results["Risk Score"].apply(
+                risk_level
+            )
 
-        st.success("File Processed Successfully")
+            results["Recommendation"] = results[
+                "Risk Score"
+            ].apply(recommendation)
 
-        st.subheader("📊 Summary")
+            # ---------------------
+            # DASHBOARD
+            # ---------------------
 
-        col1, col2, col3, col4 = st.columns(4)
+            st.success("✅ Analysis Completed Successfully")
 
-        col1.metric(
-            "Total Transactions",
-            len(results)
-        )
+            total = len(results)
 
-        col2.metric(
-            "High Risk",
-            (results["Risk Level"] == "HIGH").sum()
-        )
+            high = (
+                results["Risk Level"] == "HIGH"
+            ).sum()
 
-        col3.metric(
-            "Medium Risk",
-            (results["Risk Level"] == "MEDIUM").sum()
-        )
+            medium = (
+                results["Risk Level"] == "MEDIUM"
+            ).sum()
 
-        col4.metric(
-            "Low Risk",
-            (results["Risk Level"] == "LOW").sum()
-        )
+            low = (
+                results["Risk Level"] == "LOW"
+            ).sum()
 
-        st.subheader("📋 Results")
+            col1, col2, col3, col4 = st.columns(4)
 
-        st.dataframe(
-            results,
-            use_container_width=True
-        )
+            col1.metric("Total Transactions", total)
+            col2.metric("High Risk", high)
+            col3.metric("Medium Risk", medium)
+            col4.metric("Low Risk", low)
 
-        st.subheader("📈 Risk Distribution")
+            st.divider()
 
-        st.bar_chart(
-            results["Risk Level"].value_counts()
-        )
+            st.subheader("📊 Risk Distribution")
 
-        csv = results.to_csv(
-            index=False
-        ).encode("utf-8")
+            st.bar_chart(
+                results["Risk Level"].value_counts()
+            )
 
-        st.download_button(
-            label="⬇ Download Report",
-            data=csv,
-            file_name="fraud_risk_report.csv",
-            mime="text/csv"
-        )
+            st.divider()
+
+            st.subheader("📋 Detailed Results")
+
+            st.dataframe(
+                results,
+                use_container_width=True
+            )
+
+            # ---------------------
+            # DOWNLOAD REPORT
+            # ---------------------
+
+            csv = results.to_csv(index=False)
+
+            st.download_button(
+                label="⬇ Download Risk Report",
+                data=csv,
+                file_name="fraud_risk_report.csv",
+                mime="text/csv"
+            )
 
     except Exception as e:
-        st.error(f"Error: {e}")
 
-# ==========================
+        st.error(f"Error processing file: {e}")
+
+# =========================
 # FOOTER
-# ==========================
+# =========================
 
-st.markdown("---")
+st.divider()
+
 st.caption(
-    "AI Risk Manager | Fraud Detection using Machine Learning"
+    "AI Risk Manager | Financial Fraud Detection using Machine Learning"
 )
